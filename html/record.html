@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Video Face Detection</title>
+</head>
+<body>
+    <h2>Record a Video for Face Detection</h2>
+    <p>start video and turn your head left and right</p>
+
+    <video id="video" autoplay></video>
+    <button id="start">Start Recording</button>
+    <button id="stop" disabled>Stop & Upload</button>
+    <script>
+        let mediaRecorder;
+        let recordedChunks = [];
+
+        document.getElementById("start").onclick = async () => {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+            document.getElementById("video").srcObject = stream;
+            recordedChunks = [];
+
+            mediaRecorder = new MediaRecorder(stream, { mimeType: "video/webm" });
+            mediaRecorder.ondataavailable = (event) => recordedChunks.push(event.data);
+            mediaRecorder.onstop = uploadVideo;
+            
+            mediaRecorder.start();
+            document.getElementById("start").disabled = true;
+            document.getElementById("stop").disabled = false;
+        };
+
+        document.getElementById("stop").onclick = () => {
+            mediaRecorder.stop();
+            document.getElementById("stop").disabled = true;
+        };
+
+        async function uploadVideo() {
+            const blob = new Blob(recordedChunks, { type: "video/webm" });
+            const formData = new FormData();
+            formData.append("video", blob, "video.webm");
+
+            try {
+                const response = await fetch("http://localhost:3001/upload-video", {
+                    method: "POST",
+                    body: formData,
+                });
+
+                if (!response.ok) throw new Error("Server error");
+
+                const result = await response.json();
+                console.log("result", result);
+                alert(`Face Detection Result: ${JSON.stringify(result)}`);
+            } catch (error) {
+                console.error("Error uploading video:", error);
+                alert(error);
+            }
+
+        }
+    </script>
+</body>
+</html>

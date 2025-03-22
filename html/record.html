@@ -5,17 +5,19 @@
 </head>
 <body>
     <h2>Record a Video for Face Detection</h2>
-    <p>start video and turn your head left and right</p>
-
     <video id="video" autoplay></video>
     <button id="start">Start Recording</button>
     <button id="stop" disabled>Stop & Upload</button>
+    <button id="test-api">Test API</button>
+    <p id="status" style="display: none;">Analysing. . . .</p> <!-- Status message -->
+
     <script>
         let mediaRecorder;
         let recordedChunks = [];
+        let stream;
 
         document.getElementById("start").onclick = async () => {
-            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+            stream = await navigator.mediaDevices.getUserMedia({ video: true });
             document.getElementById("video").srcObject = stream;
             recordedChunks = [];
 
@@ -31,9 +33,17 @@
         document.getElementById("stop").onclick = () => {
             mediaRecorder.stop();
             document.getElementById("stop").disabled = true;
+            
+            // Stop the camera
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                document.getElementById("video").srcObject = null;
+            }
         };
 
         async function uploadVideo() {
+            document.getElementById("status").style.display = "block"; // Show status message
+
             const blob = new Blob(recordedChunks, { type: "video/webm" });
             const formData = new FormData();
             formData.append("video", blob, "video.webm");
@@ -51,10 +61,26 @@
                 alert(`Face Detection Result: ${JSON.stringify(result)}`);
             } catch (error) {
                 console.error("Error uploading video:", error);
-                alert(error);
+                alert("Error uploading video");
+            } finally {
+                document.getElementById("status").style.display = "none"; // Hide status message
             }
-
         }
+
+        // Test API button
+        document.getElementById("test-api").onclick = async () => {
+            try {
+                const response = await fetch("http://localhost:3001/api/data");
+                if (!response.ok) throw new Error("Failed to fetch API");
+
+                const data = await response.json();
+                console.log("API Response:", data);
+                alert(`API Response: ${JSON.stringify(data)}`);
+            } catch (error) {
+                console.error("Error fetching API:", error);
+                alert("Error fetching API");
+            }
+        };
     </script>
 </body>
 </html>

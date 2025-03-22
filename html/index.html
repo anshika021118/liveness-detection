@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <title>Real-Time Face Detection</title>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-core"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-webgl"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-converter"></script>
+</head>
+<body>
+  <h2>Move Your Head Left & Right</h2>
+  <video id="video" autoplay playsinline></video>
+  <canvas id="canvas"></canvas>
+  <p id="status">Waiting for movement...</p>
+  <p id="result"></p>
+  <button id="start">Start Detection</button>
+
+  <script>
+    let video = document.getElementById("video");
+    let canvas = document.getElementById("canvas");
+    let ctx = canvas.getContext("2d");
+    let faceMesh;
+    let prevX = null;
+    let movedRight = false, movedLeft = false;
+    let initialX = null; // Add this to track the starting position
+    async function setupCamera() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        video.srcObject = stream;
+        await new Promise((resolve) => (video.onloadedmetadata = resolve));
+      } catch (err) {
+        console.error("Error accessing camera:", err);
+        document.getElementById("status").innerText = "Error accessing camera!";
+      }
+    }
+
+    async function setupFaceMesh() {
+      faceMesh = new FaceMesh({
+        locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`,
+      });
+      faceMesh.setOptions({ maxNumFaces: 1, refineLandmarks: true });
+      await faceMesh.initialize(); // Ensure model is loaded
+    }
+
+    async function startDetection() {
+      document.getElementById("result").innerText = "";
+      movedRight = movedLeft = false;
+      await setupCamera();
+      await setupFaceMesh();
+      detectFace();
+    }
+
+    async function detectFace() {
+      if (!faceMesh) {
+        console.error("FaceMesh is not initialized!");
+        return;
+      }
+
+      faceMesh.onResults(onResults);
+      const processFrame = async () => {
+        try {
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+          await faceMesh.send({ image: video });
+
+          requestAnimationFrame(processFrame);
+        } catch (error) {
+          console.error("Face detection error:", error);
+        }
+      };
+      processFrame();
+    }
+
+    function onResults(results) {
+  if (!results.multiFaceLandmarks || results.multiFaceLandmarks.length === 0) return;
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  let landmarks = results.multiFaceLandmarks[0];
+  let noseX = landmarks[1].x; // Get nose position
+
+  if (initialX === null) {
+    initialX = noseX; // Store the first position of the nose
+  }
+
+  let movementThreshold = 0.2; // Adjust if needed
+
+  // If already movedRight/movedLeft, don't reset it.
+  if (noseX < initialX - movementThreshold) {
+    movedRight = true;
+  }
+  if (noseX > initialX + movementThreshold) {
+    movedLeft = true;
+  }
+
+  document.getElementById("status").innerText = `Moved Left: ${movedLeft}, Moved Right: ${movedRight}`;
+
+  // Only trigger liveness verification **once** when both are true
+  if (movedRight && movedLeft) {
+    // sendLivenessData();
+    document.getElementById("status").innerText = "Verifying...";
+
+    document.getElementById("result").innerText = "Liveness Verified!";
+    // document.getElementById("status").innerText = "Waiting for movement...";
+  }
+}
+
+
+
+
+    async function sendLivenessData() {
+      document.getElementById("status").innerText = "Verifying...";
+      try {
+        const response = await fetch("http://localhost:3001/api/liveness-check", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ movedRight, movedLeft }),
+        });
+
+        const data = await response.json();
+        document.getElementById("result").innerText = data.message;
+        document.getElementById("status").innerText = "Waiting for movement...";
+      } catch (error) {
+        console.error("Error:", error);
+        document.getElementById("result").innerText = "Error connecting to server.";
+      }
+    }
+
+    document.getElementById("start").addEventListener("click", startDetection);
+  </script>
+</body>
+</html>

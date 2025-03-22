@@ -73,7 +73,7 @@ function extractFrames(videoPath, framesDir) {
     return new Promise((resolve, reject) => {
         ffmpeg(videoPath)
             .output(path.join(framesDir, "frame-%02d.jpg")) 
-            .fps(3) 
+            .fps(2) 
             .on("end", resolve)
             .on("error", reject)
             .run();
